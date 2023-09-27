@@ -18,6 +18,7 @@ import { downloadFile } from "./scripts/download";
 import { addHotkey } from "./scripts/hotkeys";
 import { settingsStore } from "./scripts/settings";
 import { setTitle } from "./scripts/window-functions";
+import { userEvent } from "@testing-library/user-event";
 
 const notificationPath = `${app.getPath("userData")}/notification.jpg`;
 const appName = "TIDAL Hi-Fi";
@@ -37,7 +38,7 @@ const elements = {
   home: '*[data-test="menu--home"]',
   back: '[title^="Back"]',
   forward: '[title^="Next"]',
-  search: '[class^="searchField"]',
+  search: '*[class^="searchField"]',
   shuffle: '*[data-test="shuffle"]',
   repeat: '*[data-test="repeat"]',
   account: '*[class^="profileOptions"]',
@@ -54,12 +55,29 @@ const elements = {
   album_name_cell: '[class^="album"]',
   tracklist_row: '[data-test="tracklist-row"]',
   volume: '*[data-test="volume"]',
+  search_box: "#mainHeader",
+  results_container: "#searchSidebar",
+  result_box: 'div[data-test="search-items"]',
+  search_result: 'div[class^="searchItemContainer"]',
+  input_search: 'input[class^="searchField"]',
+  play_button: 'button[data-test="play-button"]',
+  clear_search: 'button[class^="clearSearchButton"]',
+  title_box: 'div[class^="currentMediaItemDetails"]',
+
   /**
    * Get an element from the dom
    * @param {*} key key in elements object to fetch
    */
   get: function (key: string) {
     return window.document.querySelector(this[key.toLowerCase()]);
+  },
+
+  /**
+   * Gets all elements from the dom matching pattern
+   * @param {*} key key in elements object to fetch
+   */
+  getAll: function (key: string) {
+    return window.document.querySelectorAll(this[key.toLowerCase()]);
   },
 
   /**
@@ -90,6 +108,15 @@ const elements = {
       if (artists) return Array.from(artists).map((artist) => (artist as HTMLElement).textContent);
     }
     return [];
+  },
+
+  /**
+   * returns an array of search results
+   * @returns {Array} search-result
+   */
+  getResultsArray: function () {
+    const results = this.getAll(this.searchResult);
+    return results;
   },
 
   /**
@@ -137,7 +164,91 @@ const elements = {
    */
   getText: function (key: string) {
     const element = this.get(key);
+    //ipcRenderer.send(globalEvents.log, { content: { gettext: element.textContent } } );
     return element ? element.textContent : "";
+  },
+
+  /**
+   * Shorthand function to play the first search result
+   * @param {*} text Text to search for
+   */
+  playFirstResult: function (text: string) {
+    const play = (mainHeader: HTMLElement, callback: () => void) => {
+      let ended = false;
+
+      const resBox = mainHeader.querySelector(this.result_box);
+      const results = resBox.querySelectorAll(this.search_result);
+
+      if (results.length > 1) {
+        //ipcRenderer.send(globalEvents.log, { content: { length: results.length } });
+
+        const first = results[1];
+
+        if (first) {
+          let retId: NodeJS.Timeout = null;
+          const play = first.querySelector(this.play_button);
+
+          first.addEventListener(
+            "click",
+            () => {
+              if (retId) clearTimeout(retId);
+
+              retId = setTimeout(() => {
+                if (!ended) {
+                  ended = true;
+                  callback();
+                }
+              }, 450);
+            },
+            { once: true }
+          );
+
+          setTimeout(() => {
+            if (!ended) {
+              ended = true;
+              callback();
+            }
+          }, 1500);
+
+          userEvent.click(play);
+        }
+      }
+    };
+
+    try {
+      const mainFrame = this.get("search_box");
+
+      if (mainFrame) {
+        const input = mainFrame.querySelector(this.input_search);
+
+        if (input) {
+          let id: NodeJS.Timeout = null;
+          const observer = new MutationObserver((mutationList) => {
+            if (mutationList.length) {
+              if (id) clearTimeout(id);
+
+              id = setTimeout(() => {
+                play(mainFrame, () => {
+                  const clear = input.querySelector(this.clear_search);
+                  userEvent.click(clear);
+                });
+              }, 450);
+            }
+          });
+
+          observer.observe(input, {
+            attributes: true,
+            characterData: true,
+          });
+
+          input.value = "";
+          input.focus();
+          userEvent.type(input, text);
+        }
+      }
+    } catch (err) {
+      ipcRenderer.send(globalEvents.log, { content: { err } });
+    }
   },
 
   /**
@@ -145,7 +256,10 @@ const elements = {
    * @param {*} key key in elements object to fetch
    */
   click: function (key: string) {
+    ipcRenderer.send(globalEvents.log, { content: { click: JSON.stringify(this.get(key)), key } });
+
     this.get(key).click();
+
     return this;
   },
 
@@ -283,6 +397,10 @@ function addFullScreenListeners() {
   });
 }
 
+function playFirstResult(text: string) {
+  elements.playFirstResult(text);
+}
+
 /**
  * Add ipc event listeners.
  * Some actions triggered outside of the site need info from the site.
@@ -309,6 +427,10 @@ function addIPCEventListeners() {
         default:
           break;
       }
+    });
+    ipcRenderer.on("playFirst", (_event, searchText) => {
+      ipcRenderer.send(globalEvents.log, { content: "Search text: " + searchText });
+      playFirstResult(searchText);
     });
   });
 }

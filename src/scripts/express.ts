@@ -7,12 +7,13 @@ import { globalEvents } from "./../constants/globalEvents";
 import { mediaInfo } from "./mediaInfo";
 import { settingsStore } from "./settings";
 
+type PlayFirstResult = (searchText: string) => void;
 /**
  * Function to enable TIDAL Hi-Fi's express api
  */
 
 // expressModule.run = function (mainWindow)
-export const startExpress = (mainWindow: BrowserWindow) => {
+export const startExpress = (mainWindow: BrowserWindow, playFirst: PlayFirstResult) => {
   /**
    * Shorthand to handle a fire and forget global event
    * @param {*} res
@@ -49,6 +50,11 @@ export const startExpress = (mainWindow: BrowserWindow) => {
       } else {
         handleGlobalEvent(res, globalEvents.play);
       }
+    });
+    expressApp.get("/playfirst/:text", (req, res) => {
+      console.log("Text endpoint: ", req.params.text);
+      playFirst(req.params.text);
+      res.status(200).end();
     });
   }
 

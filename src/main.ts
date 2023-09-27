@@ -155,6 +155,12 @@ function addGlobalShortcuts() {
   });
 }
 
+function playFirstResult(searchText: string) {
+  console.log("Text main: ", searchText)
+  mainWindow.webContents.send("playFirst", searchText);
+}
+
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -179,7 +185,7 @@ app.on("ready", async () => {
       addTray(mainWindow, { icon });
       refreshTray(mainWindow);
     }
-    settingsStore.get(settings.api) && startExpress(mainWindow);
+    settingsStore.get(settings.api) && startExpress(mainWindow, playFirstResult);
     settingsStore.get(settings.enableDiscord) && initRPC();
   } else {
     app.quit();
