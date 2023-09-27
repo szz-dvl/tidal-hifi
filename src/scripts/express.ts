@@ -52,7 +52,6 @@ export const startExpress = (mainWindow: BrowserWindow, playFirst: PlayFirstResu
       }
     });
     expressApp.get("/playfirst/:text", (req, res) => {
-      console.log("Text endpoint: ", req.params.text);
       playFirst(req.params.text);
       res.status(200).end();
     });
